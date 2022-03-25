@@ -1,36 +1,62 @@
 package com.github.freetie.hcspblog.controller;
 
-import com.github.freetie.hcspblog.entity.User;
+import com.github.freetie.hcspblog.entity.Result;
+import com.github.freetie.hcspblog.service.UserService;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Instant;
 import java.util.Map;
 
 @RestController
 public class AuthController {
-    private UserDetailsService userDetailsService;
-    private AuthenticationManager authenticationManager;
+    private final AuthenticationManager authenticationManager;
+    private final UserService userService;
 
-    public AuthController(UserDetailsService userDetailsService, AuthenticationManager authenticationManager) {
-        this.userDetailsService = userDetailsService;
+    public AuthController(AuthenticationManager authenticationManager, UserService userService) {
         this.authenticationManager = authenticationManager;
+        this.userService = userService;
+    }
+
+    @PostMapping("/auth/register")
+    public Result register(@RequestBody Map<String, String> usernameAndPassword) {
+        String username = usernameAndPassword.get("username");
+        String password = usernameAndPassword.get("password");
+        if (username == null || password == null) {
+            return Result.failure("用户名或密码不能为空");
+        }
+        if (username.length() < 1 || username.length() > 15) {
+            return Result.failure("用户名长度必须为1~15");
+        }
+        if (password.length() < 6 || password.length() > 16) {
+            return Result.failure("密码长度必须为6~16");
+        }
+        try {
+            userService.createUser(username, password);
+            return Result.success("注册成功");
+        } catch (DuplicateKeyException e) {
+            return Result.failure("用户名已存在");
+        }
     }
 
     @GetMapping("/auth")
     public Result auth() {
-        Result result = new Result("ok", null);
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        if (username.contains("anonymous")) {
+            Result failureResult = Result.failure();
+            failureResult.isLogin = false;
+            return failureResult;
+        }
+        Result result = Result.success();
         result.isLogin = true;
-        result.data = new User(1, "张三", "abc.com/1.jpg", Instant.now(), Instant.now());
+        result.data = userService.getUserByUsername(username);
         return result;
     }
 
@@ -38,52 +64,27 @@ public class AuthController {
     public Result login(@RequestBody Map<String, String> usernameAndPassword) {
         String username = usernameAndPassword.get("username");
         String password = usernameAndPassword.get("password");
-
-        UserDetails userDetails;
+        UsernamePasswordAuthenticationToken token = new UsernamePasswordAuthenticationToken(username, password);
         try {
-            userDetails = userDetailsService.loadUserByUsername(username);
-        } catch (UsernameNotFoundException e) {
-            return new Result("fail", "用户不存在");
-        }
-
-        UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken = new UsernamePasswordAuthenticationToken(userDetails, password, userDetails.getAuthorities());
-        try {
-            authenticationManager.authenticate(usernamePasswordAuthenticationToken);
-            SecurityContextHolder.getContext().setAuthentication(usernamePasswordAuthenticationToken);
-            Result result = new Result("ok", "登陆成功");
-            result.data = new User(1, "张三", "abc.com/1.jpg", Instant.now(), Instant.now());
+            authenticationManager.authenticate(token);
+            SecurityContextHolder.getContext().setAuthentication(token);
+            Result result = Result.success("登陆成功");
+            result.data = userService.getUserByUsername(username);
             return result;
-
+        } catch (UsernameNotFoundException e) {
+            return Result.failure("用户不存在");
         } catch (BadCredentialsException e) {
-            return new Result("fail", "密码不正确");
+            return Result.failure("密码不正确");
         }
     }
 
-    private class Result {
-        String status;
-        String msg;
-        boolean isLogin;
-        User data;
-
-        public Result(String status, String msg) {
-            this.status = status;
-            this.msg = msg;
+    @GetMapping("/auth/logout")
+    public Result logout() {
+        String username = SecurityContextHolder.getContext().getAuthentication().getName();
+        if (username.contains("anonymous")) {
+            return Result.failure("用户尚未登录");
         }
-
-        public String getStatus() {
-            return status;
-        }
-
-        public String getMsg() {
-            return msg;
-        }
-
-        public boolean isLogin() {
-            return isLogin;
-        }
-
-        public User getData() {
-            return data;
-        }
+        SecurityContextHolder.clearContext();
+        return Result.success("注销成功");
     }
 }

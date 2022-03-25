@@ -5,6 +5,7 @@ import java.time.Instant;
 public class User {
     Integer id;
     String username;
+    String password;
     String avatar;
     Instant createdAt;
     Instant updatedAt;
@@ -35,5 +36,9 @@ public class User {
 
     public Instant getUpdatedAt() {
         return updatedAt;
+    }
+
+    public String getPassword() {
+        return password;
     }
 }
