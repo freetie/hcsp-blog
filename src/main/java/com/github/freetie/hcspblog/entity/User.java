@@ -10,9 +10,10 @@ public class User {
     Instant createdAt;
     Instant updatedAt;
 
-    public User(Integer id, String username, String avatar, Instant createdAt, Instant updatedAt) {
+    public User(Integer id, String username, String password, String avatar, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.username = username;
+        this.password = password;
         this.avatar = avatar;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
